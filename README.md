@@ -1,175 +1,106 @@
-# PRISM Cloud
+# PRISM Cloud API — hardened beta build
 
-**AI-powered message threat detection, built for developers.**
+FastAPI wrapper for the AeroxLabs PRISM XGBoost message threat-detection model.
 
-PRISM Cloud is a developer API by [AeroxLabs](https://github.com/AeroxLabs) that analyzes text messages and identifies potential scams and security threats.
-
-Using machine learning, PRISM evaluates messages, predicts threat categories, assigns risk levels, and returns explainable detection indicators through a simple REST API.
-
-## Features
-
-- **Scam Detection:** Identify potentially fraudulent and malicious messages.
-- **Threat Classification:** Categorize detected threats, including phishing and financial fraud.
-- **Risk Assessment:** Receive a risk-level assessment for analyzed messages.
-- **Detection Indicators:** Understand which indicators contributed to a detection.
-- **REST API:** Integrate message threat detection into your own applications.
-- **API Authentication:** Secure requests using individual API keys.
-- **Usage Tracking:** Monitor API consumption and plan limits.
-
-## Getting Started
-
-### API Base URL
+## Project layout
 
 ```text
-https://prism-cloud.fastapicloud.dev
+prism-cloud-api/
+├── main.py
+├── database.py
+├── auth_and_limits.py
+├── ml_pipeline.py
+├── logging_config.py
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── models/  (copy your five trained model artifacts here)
 ```
 
-### Authentication
+Copy these files into `models/`:
+- `prism_threat_model.json`
+- `prism_category_model.json`
+- `prism_word_vectorizer.joblib`
+- `prism_char_vectorizer.joblib`
+- `prism_metadata.joblib`
 
-Every detection request requires an API key in the `X-API-Key` header.
+Do not upload your local SQLite database or real `.env` file to a public repository.
 
-```http
-X-API-Key: YOUR_API_KEY
-```
-
-API keys are issued by AeroxLabs. Never expose your API key in public repositories, frontend applications, or client-side code.
-
-### First Request
-
-Send a `POST` request to `/v1/detect`.
-
-**Python**
-
-```python
-import requests
-
-API_KEY = "YOUR_API_KEY"
-API_URL = "https://prism-cloud.fastapicloud.dev/v1/detect"
-
-response = requests.post(
-    API_URL,
-    headers={
-        "X-API-Key": API_KEY
-    },
-    json={
-        "text": "Your bank account has been suspended. Verify immediately."
-    },
-    timeout=30
-)
-
-response.raise_for_status()
-print(response.json())
-```
-
-**PowerShell**
+## Local setup (Windows PowerShell)
 
 ```powershell
-$headers = @{"X-API-Key"="YOUR_API_KEY"}
-$body = @{text="Your bank account has been suspended. Verify immediately."} | ConvertTo-Json
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
 
+Generate two different secrets:
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+Use one value for `ADMIN_SECRET` and another for `API_KEY_PEPPER`.
+Keep `.env` private.
+
+Run:
+```powershell
+uvicorn main:app --host 127.0.0.1 --port 8000
+```
+Docs: http://127.0.0.1:8000/docs
+
+## Health checks
+
+- `GET /health/live`: process liveness.
+- `GET /health`: checks model readiness and executes `SELECT 1` against SQLite.
+  Returns HTTP 200 when both checks pass, otherwise HTTP 503.
+
+## Create customer keys
+
+```powershell
 Invoke-RestMethod -Method Post `
-    -Uri "https://prism-cloud.fastapicloud.dev/v1/detect" `
-    -Headers $headers `
-    -ContentType "application/json" `
-    -Body $body
+  -Uri "http://127.0.0.1:8000/admin/keys" `
+  -Headers @{"X-Admin-Secret"="YOUR_ADMIN_SECRET"} `
+  -ContentType "application/json" `
+  -Body '{"user_id":"customer-001","email":"customer@example.com","tier":"free"}'
 ```
 
-## API Reference
+Set `"tier":"pro"` only after confirming payment. The raw key is returned
+once; only its HMAC-SHA256 hash is stored.
 
-### `POST /v1/detect`
+## Plan enforcement
 
-Analyzes a text message for potential threats.
-
-**Request body**
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `text` | string | Yes | Message to analyze |
-
-**Example response**
-
-```json
-{
-  "is_scam": true,
-  "confidence_score": 0.8078,
-  "risk_level": "medium",
-  "reason_codes": [
-    "URGENCY_OR_ACCOUNT_PRESSURE",
-    "FINANCIAL_ACCOUNT_LANGUAGE",
-    "PREDICTED_CATEGORY:FINANCIAL_FRAUD"
-  ],
-  "usage": {
-    "tier": "pro",
-    "requests_used": 1,
-    "monthly_limit": 25000,
-    "overage_requests": 0,
-    "is_overage": false
-  }
-}
-```
-
-The response above is illustrative, not a guaranteed result. Model confidence scores are not calibrated probabilities, and risk levels are assigned using deterministic rules.
-
-### Response fields
-
-| Field | Description |
-|---|---|
-| `is_scam` | Whether the model classified the message as a potential scam |
-| `confidence_score` | Model confidence score |
-| `risk_level` | Assigned risk level |
-| `reason_codes` | Detection indicators and predicted category |
-| `usage` | API plan and usage information |
-
-### `GET /health`
-
-Returns application health information.
-
-## Plans and Usage Limits
-
-| Plan | Monthly requests | Rate limit |
+| Plan | Rate limit per API key | Included requests per rolling 30 days |
 |---|---:|---:|
-| Free | 500 | 1 request/second |
-| Pro | 25,000 included | 5 requests/second |
+| Free | 1 request/second | 500 |
+| Pro | 5 requests/second | 25,000 |
 
-Pro requests beyond the included allowance are tracked as overage requests. Automatic overage billing is not currently supported.
+Free requests after 500 are rejected with HTTP 429. Pro requests beyond
+25,000 continue and increment `overage_count`. This app does not collect
+payments or automatically bill overages.
 
-Contact AeroxLabs for API access and plan information.
+The rate limiter is process-local. It works in one process, but is not shared
+between workers or replicas. Use one worker/instance for this beta; use a
+shared Redis limiter before scaling.
 
-## Error Handling
+## Logs and privacy
 
-PRISM Cloud uses standard HTTP status codes to communicate request outcomes.
+JSON application logs include request ID, method, path, status, and duration.
+They do not log message bodies or API-key values. Validation errors omit
+submitted input values. Exception stack traces are retained in server logs.
+Ensure hosting proxy settings do not log request bodies.
 
-| Status | Meaning |
-|---|---|
-| `200` | Request successfully processed |
-| `401` | Missing or invalid API key |
-| `429` | Rate or usage limit exceeded |
-| `500` | Internal server error |
+## SQLite deployment warning
 
-Error responses may include a `request_id` for troubleshooting.
+SQLite is retained as requested. It is suitable for a single instance and
+light traffic, but the database file must live on persistent storage or
+customer keys and usage counters may be lost when the host replaces the
+instance. Verify the platform's storage behavior before accepting customers.
 
-## Architecture and Intellectual Property
+## Beta limitations
 
-PRISM Cloud is provided as a hosted API.
-
-The underlying machine learning models, model artifacts, training datasets, feature extraction pipeline, and internal inference implementation are proprietary to AeroxLabs and are not included in this repository.
-
-This repository contains public-facing API documentation and integration examples only.
-
-## Responsible Use
-
-PRISM is designed to assist with identifying potentially fraudulent messages. Its predictions should not be treated as definitive proof that a message is malicious or legitimate.
-
-Always apply appropriate human review and additional security controls when making consequential decisions.
-
-## About AeroxLabs
-
-PRISM Cloud is developed by **AeroxLabs**, an independent AI development initiative focused on building practical machine learning systems and developer tools.
-
-## Contact
-
-For API access, questions, or collaboration inquiries, contact AeroxLabs through GitHub.
-
----
-
-© 2026 AeroxLabs. All rights reserved.
+- Pro overages are counted but not billed automatically.
+- `confidence_score` is a raw XGBoost score, not a calibrated probability.
+- Reason codes are heuristic indicators and predicted category, not SHAP
+  explanations or causal attributions.
+- Validate on source-held-out data before making real-world accuracy claims.
+- Use HTTPS, protect admin access, rotate exposed secrets, and back up SQLite.

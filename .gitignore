@@ -1,0 +1,123 @@
+
+# ==============================
+# Environment variables & secrets
+# ==============================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+*_secret*
+*_secrets*
+
+# ==============================
+# Databases
+# ==============================
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+instance/
+
+# ==============================
+# API keys & sensitive config
+# ==============================
+
+api_keys.json
+keys.json
+token.json
+tokens.json
+config.local.*
+*.secret
+
+# ==============================
+# Machine learning models
+# ==============================
+models/
+*.joblib
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.onnx
+*.gguf
+*.safetensors
+*.h5
+*.keras
+*.model
+*.bin
+
+# ==============================
+# Datasets & training outputs
+# ==============================
+data/
+datasets/
+*.csv
+*.parquet
+*.jsonl
+*.feather
+*.arrow
+
+# ==============================
+# Python
+# ==============================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ==============================
+# Virtual environments
+# ==============================
+.venv/
+venv/
+env/
+ENV/
+
+# ==============================
+# Build & distribution
+# ==============================
+.fastapicloud
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ==============================
+# Logs & temporary files
+# ==============================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# ==============================
+# IDEs & operating systems
+# ==============================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==============================
+# Local project files
+# ==============================
+*.local
+*.local.*
