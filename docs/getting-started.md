@@ -18,7 +18,7 @@ PRISM Cloud requires an API key to access protected endpoints.
 
 To request access:
 
-1. Contact AeroxLabs through its official communication channels.
+1. Contact AeroxLabs by emailing [aeroxlabs.dev@gmail.com](mailto:aeroxlabs.dev@gmail.com) or DM on [LinkedIn](https://www.linkedin.com/company/aeroxlabs).
 2. Specify whether you want the Free or Pro plan.
 3. Receive your API key.
 4. Store the key securely.
